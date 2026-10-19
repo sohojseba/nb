@@ -160,7 +160,7 @@ window.HN_CONFIG={url:"https://cvlzlcvslxrfdzzwidpn.supabase.co",key:"sb_publish
 <h2 id="lst">বিজ্ঞাপনসমূহ</h2>
 <div class="bar"><span class="pill" id="cnt"></span><button class="chip" id="clr">✕ ফিল্টার মুছুন</button>
  <select id="so"><option value="new">নতুন আগে</option><option value="lo">কম দাম আগে</option><option value="hi">বেশি দাম আগে</option></select></div>
-<div class="grid" id="grid" style="margin-top:12px"></div>
+<div class="grid" id="grid" style="margin-top:12px"></div><div style="text-align:center;margin:16px 0"><button class="chip" id="more" style="display:none">আরও দেখুন ⬇</button></div>
 <p class="note">ℹ️ এটি ডেমো সংস্করণ: নমুনা বিজ্ঞাপন দেখানো হচ্ছে, আর আপনার দেওয়া বিজ্ঞাপন ও পছন্দ শুধু এই ডিভাইসে সেভ হয়, আর প্রতিটি বিজ্ঞাপন ১০ দিন পর নিজে থেকে মুছে যায়।</p>
 <h2>কীভাবে কাজ করে</h2>
 <section class="steps">
@@ -260,11 +260,12 @@ const ld=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){retu
 const sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
 let mine=ld("hn_ads",[]),fav=ld("hn_fav",[]),fc="all",fd="all",fa="all",onlyFav=false;
 const CFG=window.HN_CONFIG||{},REMOTE=!!(CFG.url&&CFG.key);let sb=null,user=null,pub=[];
-const TTL=10*864e5;
-const fromRow=r=>({id:r.id,t:r.title,c:r.category,p:r.price||0,a:r.upazila,m:r.phone,n:r.description||"",img:/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(r.image||"")?r.image:"",sold:r.sold,own:!!user&&r.user_id===user.id,addr:r.address||"",v:!!r.verified,ts:new Date(r.expires_at).getTime()-ttl({c:r.category})});
-async function load(){const {data,error}=await sb.from("ads").select("*").order("created_at",{ascending:false}).limit(100);if(error){alert("তথ্য আনা যায়নি: "+error.message);return}const rows=data.filter(r=>new Date(r.expires_at)>new Date()).map(fromRow);mine=rows.filter(x=>x.own);pub=rows.filter(x=>!x.own);render()}
-async function up(id,patch){const {error}=await sb.from("ads").update(patch).eq("id",id);if(error)alert(error.message);await load()}
-async function ren(x){const {error}=await sb.rpc("renew_ad",{ad_id:x.id});if(error)alert("নবায়ন করা যায়নি (মেয়াদ শেষের ২ দিন আগে থেকে, সর্বোচ্চ ৩ বার)");await load()}
+const TTL=10*864e5;let pg=24,psg="",editId=null;
+function resetForm(){["fT","fP","fM","fN","fI","fAd"].forEach(i=>{$(i).value=""});editId=null;$("fC").disabled=false;$("ovA").querySelector("h3").textContent="নতুন বিজ্ঞাপন দিন"}
+const fromRow=r=>({id:r.id,t:r.title,c:r.category,p:r.price||0,a:r.upazila,m:r.phone,n:r.description||"",img:/^(data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+|https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/object\/public\/ss-ad-images\/[A-Za-z0-9_.\/-]+)$/.test(r.image||"")?r.image:"",sold:r.sold,own:!!user&&r.user_id===user.id,addr:r.address||"",v:!!r.verified,ts:new Date(r.expires_at).getTime()-ttl({c:r.category})});
+async function load(){let data=[],error=null;for(let s=0;s<10000;s+=500){const r=await sb.from("ss_ads").select("*").order("created_at",{ascending:false}).range(s,s+499);if(r.error){error=r.error;break}data=data.concat(r.data);if(r.data.length<500)break}if(error){alert("তথ্য আনা যায়নি: "+error.message);return}const rows=data.filter(r=>new Date(r.expires_at)>new Date()).map(fromRow);mine=rows.filter(x=>x.own);pub=rows.filter(x=>!x.own);render()}
+async function up(id,patch){const {error}=await sb.from("ss_ads").update(patch).eq("id",id);if(error)alert(error.message);await load()}
+async function ren(x){const {error}=await sb.rpc("ss_renew_ad",{ad_id:x.id});if(error)alert("নবায়ন করা যায়নি (মেয়াদ শেষের ২ দিন আগে থেকে, সর্বোচ্চ ৩ বার)");await load()}
 function openLogin(){
  $("lg").innerHTML='<h3>🔐 লগইন</h3><p class="note">আপনার ইমেইলে একটি কোড যাবে, সেটি দিয়ে লগইন হবে।</p><label>ইমেইল</label><input id="lE" type="email" autocomplete="email"><div id="lC" style="display:none"><label>ইমেইলে আসা কোড</label><input id="lK" inputmode="numeric" maxlength="8"></div><div class="row"><button class="btn g" id="lX">বাতিল</button><button class="btn grad" id="lB">কোড পাঠান</button></div>';
  let sent=false;
@@ -299,16 +300,17 @@ function render(){
  $("tabs").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{fc=b.dataset.t;render()});
  $("st1").textContent=bn(all().filter(x=>!x.sold).length);$("st2").textContent=bn(CT.length);$("st3").textContent=bn(DS.flatMap(k=>UP[k]).length);$("st4").textContent=bn(DS.length);
  $("clr").style.display=(fc!=="all"||fd!=="all"||fa!=="all"||onlyFav||$("q").value)?"":"none";
- const L=list();$("cnt").textContent=bn(L.length)+" টি বিজ্ঞাপন";
- $("grid").innerHTML=L.length?L.map((x,i)=>{const cc=CT.find(c=>c.k===x.c);return `<article class="card" data-id="${esc(x.id)}" style="animation-delay:${i*40}ms"><div class="pic">${x.img?`<img src="${esc(x.img)}" alt="">`:EM[x.c]}<span class="tag" style="background:linear-gradient(120deg,${cc.g})">${TG[x.c]}</span><span class="loc">📍 ${esc(x.a)}, ${esc(dist(x.a))}</span><button class="fav" data-f="${esc(x.id)}" aria-label="পছন্দ">${fav.includes(x.id)?"♥":"♡"}</button></div><div class="bd"><h3>${esc(x.t)}</h3><p>${esc(x.n)}</p><div class="ft"><span class="price gt">${x.p?"৳ "+bn(x.p)+pu(x):"যোগাযোগ করুন"}</span><a class="call" href="tel:${esc(x.m)}"${isDemo(x)?" data-demo":""}>📞 কল</a></div></div></article>`}).join(""):'<div class="empty">কোনো বিজ্ঞাপন পাওয়া যায়নি 🔎</div>';
+ const sg=[fc,fd,fa,onlyFav,$("q").value,$("so").value,spc].join("|");if(sg!==psg){psg=sg;pg=24}const L=list();$("more").style.display=L.length>pg?"":"none";$("cnt").textContent=bn(L.length)+" টি বিজ্ঞাপন";
+ $("grid").innerHTML=L.length?L.slice(0,pg).map((x,i)=>{const cc=CT.find(c=>c.k===x.c);return `<article class="card" data-id="${esc(x.id)}" style="animation-delay:${i*40}ms"><div class="pic">${x.img?`<img src="${esc(x.img)}" alt="">`:EM[x.c]}<span class="tag" style="background:linear-gradient(120deg,${cc.g})">${TG[x.c]}${x.own&&LONG.includes(x.c)&&!x.v?" · ⏳ যাচাই চলছে":""}</span><span class="loc">📍 ${esc(x.a)}, ${esc(dist(x.a))}</span><button class="fav" data-f="${esc(x.id)}" aria-label="পছন্দ">${fav.includes(x.id)?"♥":"♡"}</button></div><div class="bd"><h3>${esc(x.t)}</h3><p>${esc(x.n)}</p><div class="ft"><span class="price gt">${x.p?"৳ "+bn(x.p)+pu(x):"যোগাযোগ করুন"}</span><a class="call" href="tel:${esc(x.m)}"${isDemo(x)?" data-demo":""}>📞 কল</a></div></div></article>`}).join(""):'<div class="empty">কোনো বিজ্ঞাপন পাওয়া যায়নি 🔎</div>';
  $("grid").querySelectorAll(".card").forEach(c=>c.onclick=e=>{if(e.target.closest(".fav")||e.target.closest(".call"))return;show(c.dataset.id)});
  $("grid").querySelectorAll(".fav").forEach(b=>b.onclick=()=>{const i=b.dataset.f;fav=fav.includes(i)?fav.filter(z=>z!==i):[...fav,i];sv("hn_fav",fav);render()});
 }
 function show(id){
  const x=all().find(y=>y.id===id);if(!x)return;
  const num=String(x.m).replace(/\D/g,"").replace(/^88/,"");
- $("vw").innerHTML=`<div class="pic" style="border-radius:16px;height:170px">${x.img?`<img src="${esc(x.img)}" alt="" style="border-radius:16px">`:EM[x.c]}</div><h3 style="margin-top:12px">${esc(x.t)}${x.v?" ✅ যাচাইকৃত":""}</h3><div class="price gt">${x.p?"৳ "+bn(x.p)+pu(x):"যোগাযোগ করুন"}</div><p style="color:var(--mu);margin:6px 0">📍 ${esc(x.a)}, ${esc(dist(x.a))} · ${TG[x.c]}${x.own?` · ⏳ ${bn(left(x))} দিন পর মুছে যাবে`:""}</p><p>${esc(x.n)}</p>${x.addr?`<p class="note">🏠 ${esc(x.addr)}</p>`:""}${NOTE[x.c]?`<p class="note">⚠️ ${NOTE[x.c]}</p>`:""}<div class="row"><a class="btn" style="background:var(--ok)" href="tel:${num}"${isDemo(x)?" data-demo":""}>📞 কল</a><a class="btn grad" target="_blank" rel="noopener" href="https://wa.me/88${num}"${isDemo(x)?" data-demo":""}>WhatsApp</a></div>${MAPC.includes(x.c)||x.addr?`<div class="row"><a class="btn g" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((x.addr||"")+" "+x.a+", "+dist(x.a)+", Bangladesh")}">📍 ম্যাপে দেখুন</a></div>`:""}${x.own&&left(x)<=win(x)?`<div class="row"><button class="btn grad" id="rn">🔄 পুনরায় প্রকাশ করুন (আরও ১০ দিন)</button></div>`:""}<div class="row"><button class="btn g" id="shr">↗ শেয়ার</button><button class="btn g" id="cv">বন্ধ</button></div><p style="text-align:center;margin:12px 0 0;font-size:.85rem"><a style="color:var(--mu)" href="mailto:3217799@gmail.com?subject=${encodeURIComponent("রিপোর্ট: "+x.t)}">⚠️ বিজ্ঞাপনটি রিপোর্ট করুন</a></p>`;
+ $("vw").innerHTML=`<div class="pic" style="border-radius:16px;height:170px">${x.img?`<img src="${esc(x.img)}" alt="" style="border-radius:16px">`:EM[x.c]}</div><h3 style="margin-top:12px">${esc(x.t)}${x.own&&LONG.includes(x.c)&&!x.v?" ⏳ যাচাই চলছে (এখনো সবাইকে দেখানো হচ্ছে না)":""}${x.v?" ✅ যাচাইকৃত":""}</h3><div class="price gt">${x.p?"৳ "+bn(x.p)+pu(x):"যোগাযোগ করুন"}</div><p style="color:var(--mu);margin:6px 0">📍 ${esc(x.a)}, ${esc(dist(x.a))} · ${TG[x.c]}${x.own?` · ⏳ ${bn(left(x))} দিন পর মুছে যাবে`:""}</p><p>${esc(x.n)}</p>${x.addr?`<p class="note">🏠 ${esc(x.addr)}</p>`:""}${NOTE[x.c]?`<p class="note">⚠️ ${NOTE[x.c]}</p>`:""}<div class="row"><a class="btn" style="background:var(--ok)" href="tel:${num}"${isDemo(x)?" data-demo":""}>📞 কল</a><a class="btn grad" target="_blank" rel="noopener" href="https://wa.me/88${num}"${isDemo(x)?" data-demo":""}>WhatsApp</a></div>${MAPC.includes(x.c)||x.addr?`<div class="row"><a class="btn g" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((x.addr||"")+" "+x.a+", "+dist(x.a)+", Bangladesh")}">📍 ম্যাপে দেখুন</a></div>`:""}${x.own&&left(x)<=win(x)?`<div class="row"><button class="btn grad" id="rn">🔄 পুনরায় প্রকাশ করুন (আরও ১০ দিন)</button></div>`:""}<div class="row"><button class="btn g" id="shr">↗ শেয়ার</button><button class="btn g" id="cv">বন্ধ</button></div><p style="text-align:center;margin:12px 0 0;font-size:.85rem"><a id="rp" style="color:var(--mu)" href="mailto:3217799@gmail.com?subject=${encodeURIComponent("রিপোর্ট: "+x.t)}">⚠️ বিজ্ঞাপনটি রিপোর্ট করুন</a></p>`;
  $("cv").onclick=()=>$("ovV").classList.remove("show");
+ $("rp").onclick=async e=>{if(!REMOTE||isDemo(x))return;e.preventDefault();if(!user){$("ovV").classList.remove("show");openLogin();return}const r=prompt("রিপোর্টের কারণ লিখুন (যেমন: ভুয়া, প্রতারণা, ভুল তথ্য)");if(!r||r.trim().length<3)return;const {error}=await sb.from("reports").insert({ad_id:x.id,reason:r.trim().slice(0,200)});alert(error?(error.code==="23505"?"আপনি আগেই রিপোর্ট করেছেন":"রিপোর্ট পাঠানো যায়নি"):"ধন্যবাদ, রিপোর্ট পাঠানো হয়েছে।")};
  if($("rn"))$("rn").onclick=()=>{$("ovV").classList.remove("show");if(REMOTE)ren(x);else{x.ts=Date.now();sv("hn_ads",mine);render()}};
  $("shr").onclick=async()=>{const d={title:x.t,text:x.t+" – সহজ সেবা ডট কম"};try{navigator.share?await navigator.share(d):await navigator.clipboard.writeText(d.text);}catch(e){}};
  $("ovV").classList.add("show")}
@@ -323,11 +325,11 @@ $("clr").onclick=()=>{$("q").value="";fc=fd=fa="all";onlyFav=false;fillUp($("ar"
 $("fC").innerHTML=CT.map(c=>`<option value="${c.k}">${c.n}</option>`).join("");
 $("ar").onchange=()=>{setUp($("ar").value)};
 $("q").oninput=render;$("go").onclick=()=>{render();$("lst").scrollIntoView()};
-$("so").onchange=render;
+$("so").onchange=render;$("more").onclick=()=>{pg+=24;render()};
 $("fvb").onclick=()=>{onlyFav=!onlyFav;render();$("lst").scrollIntoView()};
 $("th").onclick=()=>{const r=document.documentElement,d=r.dataset.theme?r.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches;r.dataset.theme=d?"light":"dark"};
-$("add").onclick=()=>REMOTE&&!user?openLogin():$("ovA").classList.add("show");
-$("xA").onclick=()=>$("ovA").classList.remove("show");
+$("add").onclick=()=>{if(REMOTE&&!user)return openLogin();if(editId)resetForm();$("ovA").classList.add("show")};
+$("xA").onclick=()=>{$("ovA").classList.remove("show");if(editId)resetForm()};
 const HINT={bach:"যেমন: সিট/রুম/ফ্ল্যাট, ভাড়ার মধ্যে গ্যাস-পানি-ওয়াইফাই আছে কি না, বাথরুম শেয়ার কি না, অগ্রিম কত",stay:"যেমন: কত জন থাকতে পারবেন, বেডরুম সংখ্যা, রান্নাঘর, ন্যূনতম কত রাত, কাছের দর্শনীয় স্থান",land:"যেমন: কোন কাজে সহায়তা করেন (খারিজ, দলিল, পর্চা), অভিজ্ঞতা, অফিসের সময়",doc:"যেমন: ডিগ্রি ও বিশেষজ্ঞতা, চেম্বারের সময়, কোন দিন বন্ধ, সিরিয়ালের নিয়ম",hosp:"যেমন: কী কী টেস্ট/সেবা আছে, খোলার সময়, জরুরি সেবা আছে কি না"};
 function openGuide(){
  $("gd").innerHTML=`<h3>📜 জমির খারিজ (মিউটেশন) গাইড</h3>
@@ -385,22 +387,25 @@ const saveAd=async()=>{
  let t=$("fT").value.trim();const m=$("fM").value.trim();
  if(!t||!/^(\+?88)?01\d{9}$/.test(m)){alert("শিরোনাম ও সঠিক মোবাইল নম্বর দিন।");return}
  if($("fC").value==="prop")t=("["+$("fK").value+"] "+t).slice(0,70);
- const img=await shrink($("fI").files[0]);
+ let img=await shrink($("fI").files[0]);
+ if(REMOTE&&img&&user){const path=user.id+"/"+Date.now()+".jpg";const {error:ue}=await sb.storage.from("ss-ad-images").upload(path,await (await fetch(img)).blob(),{contentType:"image/jpeg"});if(ue){alert("ছবি আপলোড হয়নি: "+ue.message);return}img=sb.storage.from("ss-ad-images").getPublicUrl(path).data.publicUrl}
  const ad={t,c:$("fC").value,p:+$("fP").value||0,a:$("fA").value,m,n:$("fN").value.trim(),addr:$("fAd").value.trim(),img};
  if(REMOTE){if(!user){$("ovA").classList.remove("show");openLogin();return}
-  const {error}=await sb.from("ads").insert({title:ad.t,category:ad.c,price:ad.p,upazila:ad.a,district:dist(ad.a),phone:ad.m,description:ad.n,address:ad.addr||null,image:ad.img||null});
+  const row={title:ad.t,price:ad.p,upazila:ad.a,district:dist(ad.a),phone:ad.m,description:ad.n,address:ad.addr||null};if(ad.img)row.image=ad.img;
+  const {error}=editId?await sb.from("ss_ads").update(row).eq("id",editId):await sb.from("ss_ads").insert({...row,category:ad.c,image:ad.img||null});
   if(error){alert("বিজ্ঞাপন দেওয়া যায়নি: "+error.message);return}await load();if(LONG.includes(ad.c))alert("ধন্যবাদ! যাচাইয়ের পর আপনার বিজ্ঞাপন সবাইকে দেখানো হবে।")}
- else mine.unshift({id:"u"+Date.now(),...ad,ts:Date.now()});
- if(!REMOTE)sv("hn_ads",mine);["fT","fP","fM","fN","fI","fAd"].forEach(i=>$(i).value="");
+ else if(editId){const o=mine.find(z=>z.id===editId);if(o)Object.assign(o,ad,{img:ad.img||o.img})}else mine.unshift({id:"u"+Date.now(),...ad,ts:Date.now()});
+ if(!REMOTE)sv("hn_ads",mine);resetForm();
  $("ovA").classList.remove("show");render()};
 $("sv").onclick=async()=>{if($("sv").disabled)return;$("sv").disabled=true;try{await saveAd()}finally{$("sv").disabled=false}};
 function myAds(){
  purge();
- $("mv").innerHTML='<h3>👤 আমার বিজ্ঞাপন</h3>'+(mine.length?mine.map(x=>`<div style="border:1px solid var(--bd);border-radius:14px;padding:12px;margin-top:10px;${x.sold?"opacity:.7":""}"><b>${esc(x.t)}</b><div class="note" style="margin:2px 0 8px">📍 ${esc(x.a)}, ${esc(dist(x.a))} · ${x.sold?"✅ বিক্রি হয়েছে":"⏳ "+bn(left(x))+" দিন বাকি"}</div><div class="row sm" style="margin-top:0"><button class="btn g" data-s="${esc(x.id)}">${x.sold?"আবার সক্রিয়":"✅ বিক্রি হয়েছে"}</button><button class="btn g" data-r="${esc(x.id)}" ${x.sold||left(x)>win(x)?"disabled":""}>🔄 নবায়ন</button><button class="btn g" data-d="${esc(x.id)}">🗑 মুছুন</button></div></div>`).join(""):'<p class="empty">আপনি এখনো কোনো বিজ্ঞাপন দেননি।</p>')+'<p class="note">🔄 নবায়ন শুধু মেয়াদ শেষের ২ দিন আগে থেকে সম্ভব। বিক্রি হয়ে গেলে বিজ্ঞাপন জনসম্মুখ তালিকা থেকে সরে যায়।</p><div class="row"><button class="btn g" id="cm">বন্ধ করুন</button>'+(REMOTE?'<button class="btn g" id="lo">লগআউট</button>':"")+'</div>';
+ $("mv").innerHTML='<h3>👤 আমার বিজ্ঞাপন</h3>'+(mine.length?mine.map(x=>`<div style="border:1px solid var(--bd);border-radius:14px;padding:12px;margin-top:10px;${x.sold?"opacity:.7":""}"><b>${esc(x.t)}</b><div class="note" style="margin:2px 0 8px">📍 ${esc(x.a)}, ${esc(dist(x.a))} · ${x.sold?"✅ বিক্রি হয়েছে":"⏳ "+bn(left(x))+" দিন বাকি"}</div><div class="row sm" style="margin-top:0;flex-wrap:wrap"><button class="btn g" style="flex:1 1 100%" data-e="${esc(x.id)}">✏️ এডিট করুন</button><button class="btn g" data-s="${esc(x.id)}">${x.sold?"আবার সক্রিয়":"✅ বিক্রি হয়েছে"}</button><button class="btn g" data-r="${esc(x.id)}" ${x.sold||left(x)>win(x)?"disabled":""}>🔄 নবায়ন</button><button class="btn g" data-d="${esc(x.id)}">🗑 মুছুন</button></div></div>`).join(""):'<p class="empty">আপনি এখনো কোনো বিজ্ঞাপন দেননি।</p>')+'<p class="note">🔄 নবায়ন শুধু মেয়াদ শেষের ২ দিন আগে থেকে সম্ভব। বিক্রি হয়ে গেলে বিজ্ঞাপন জনসম্মুখ তালিকা থেকে সরে যায়।</p><div class="row"><button class="btn g" id="cm">বন্ধ করুন</button>'+(REMOTE?'<button class="btn g" id="lo">লগআউট</button>':"")+'</div>';
  const by=i=>mine.find(z=>z.id===i),save=()=>{sv("hn_ads",mine);myAds();render()};
  $("mv").querySelectorAll("[data-s]").forEach(b=>b.onclick=()=>{const x=by(b.dataset.s);x.sold=!x.sold;if(REMOTE)up(x.id,{sold:x.sold}).then(myAds);else save()});
  $("mv").querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{const x=by(b.dataset.r);if(x&&left(x)<=win(x)){if(REMOTE)ren(x).then(myAds);else{x.ts=Date.now();save()}}});
- $("mv").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{if(confirm("বিজ্ঞাপনটি মুছে ফেলবেন?")){if(REMOTE)sb.from("ads").delete().eq("id",b.dataset.d).then(load).then(myAds);else{mine=mine.filter(z=>z.id!==b.dataset.d);save()}}});
+ $("mv").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{if(confirm("বিজ্ঞাপনটি মুছে ফেলবেন?")){if(REMOTE){const o=by(b.dataset.d),pt=o&&o.img&&o.img.split("/ss-ad-images/")[1];if(pt)sb.storage.from("ss-ad-images").remove([pt]);sb.from("ss_ads").delete().eq("id",b.dataset.d).then(load).then(myAds)}else{mine=mine.filter(z=>z.id!==b.dataset.d);save()}}});
+ $("mv").querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{const x=by(b.dataset.e);if(!x)return;editId=x.id;$("ovM").classList.remove("show");$("fC").value=x.c;$("fC").onchange();$("fC").disabled=true;const m=x.t.match(/^\[(বিক্রি|ভাড়া|কিনতে চাই)\] /);if(m)$("fK").value=m[1];$("fT").value=m?x.t.slice(m[0].length):x.t;$("fP").value=x.p||"";$("fD").value=dist(x.a);fillUp($("fA"),$("fD").value);$("fA").value=x.a;$("fAd").value=x.addr||"";$("fM").value=x.m;$("fN").value=x.n;$("ovA").querySelector("h3").textContent="বিজ্ঞাপন এডিট করুন";$("ovA").classList.add("show")});
  $("cm").onclick=()=>$("ovM").classList.remove("show");
  if($("lo"))$("lo").onclick=async()=>{await sb.auth.signOut();user=null;$("ovM").classList.remove("show");await load()};
  $("ovM").classList.add("show")}
